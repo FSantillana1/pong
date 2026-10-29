@@ -4,42 +4,28 @@
 //
 //  Created by Fernando Santillana on 20/10/26.
 //
-
 import UIKit
 import SpriteKit
-import GameplayKit
 
-class GameViewController: UIViewController {
-
-    override func viewDidLoad() {
-        super.viewDidLoad()
+final class GameViewController: UIViewController {
+    
+    private var hasPresentedScene = false
+    
+    override func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        guard !hasPresentedScene, let skView = view as? SKView else { return }
+        hasPresentedScene = true
         
-        if let view = self.view as! SKView? {
-            // Load the SKScene from 'GameScene.sks'
-            if let scene = SKScene(fileNamed: "GameScene") {
-                // Set the scale mode to scale to fit the window
-                scene.scaleMode = .aspectFill
-                
-                // Present the scene
-                view.presentScene(scene)
-            }
-            
-            view.ignoresSiblingOrder = true
-            
-            view.showsFPS = true
-            view.showsNodeCount = true
-        }
+        let scene = GameScene(size: skView.bounds.size)
+        scene.scaleMode = .resizeFill
+        
+        skView.ignoresSiblingOrder = true
+        skView.showsFPS = true
+        skView.showsNodeCount = true
+        skView.presentScene(scene)
     }
-
-    override var supportedInterfaceOrientations: UIInterfaceOrientationMask {
-        if UIDevice.current.userInterfaceIdiom == .phone {
-            return .allButUpsideDown
-        } else {
-            return .all
-        }
-    }
-
-    override var prefersStatusBarHidden: Bool {
-        return true
-    }
+    
+    override var supportedInterfaceOrientations: UIInterfaceOrientationMask { .portrait }
+    override var prefersStatusBarHidden: Bool { true }
+    override var prefersHomeIndicatorAutoHidden: Bool { true }
 }
