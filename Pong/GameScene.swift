@@ -18,12 +18,14 @@ final class GameScene: SKScene {
     
     private let humanScoreLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
     private let opponentScoreLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
+    private let messageLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
     
     private var scoreKeeper = ScoreKeeper(pointsToWin: 7)
     
     private enum State {
         case waitingToServe
         case playing
+        case gameOver
     }
     
     private var state: State = .waitingToServe
@@ -38,6 +40,7 @@ final class GameScene: SKScene {
         setUpPlayerPaddle(in: view)
         setUpBall()
         serve()
+        setUpMessageLabel()
     }
 
     override func update(_ currentTime: TimeInterval) {
@@ -47,6 +50,10 @@ final class GameScene: SKScene {
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if state == .gameOver {
+            restartGame()
+            return
+        }
         movePaddle(with: touches)
     }
     
@@ -88,6 +95,26 @@ final class GameScene: SKScene {
     private func goalScored(by scorer: Player) {
         scoreKeeper.awardPoint(to: scorer)
         updateScoreLabels()
+        
+        if let winner = scoreKeeper.winner {
+           endGame(winner: winner)
+        } else {
+            serve()
+        }
+    }
+    
+    private func endGame(winner: Player) {
+        state = .gameOver
+        ball.physicsBody?.velocity = .zero
+        ball.position = CGPoint(x: frame.midX, y: frame.midY)
+        let result = (winner == .human) ? "You win!" : "You Lose"
+        messageLabel.text = result + "\nTap to play again!"
+    }
+    
+    private func restartGame() {
+        scoreKeeper.reset()
+        updateScoreLabels()
+        messageLabel.text = ""
         serve()
     }
     
@@ -190,5 +217,16 @@ final class GameScene: SKScene {
     private func updateScoreLabels() {
         humanScoreLabel.text = "\(scoreKeeper.humanScore)"
         opponentScoreLabel.text = "\(scoreKeeper.opponentScore)"
+    }
+    
+    private func setUpMessageLabel() {
+        messageLabel.fontSize = 28
+        messageLabel.fontColor = .white
+        messageLabel.numberOfLines = 0
+        messageLabel.horizontalAlignmentMode = .center
+        messageLabel.verticalAlignmentMode = .center
+        messageLabel.position = CGPoint(x: frame.midX, y: frame.midY - 160)
+        messageLabel.zPosition = 1
+        addChild(messageLabel)
     }
 }
