@@ -16,17 +16,44 @@ final class GameScene: SKScene {
     private let paddleSize = CGSize(width: 110, height: 6)
     private let playerPaddle = SKShapeNode()
     
+    private let humanScoreLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
+    private let opponentScoreLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
+    private let messageLabel = SKLabelNode(fontNamed: "HelveticaNeue-Bold")
+    
+    private var scoreKeeper = ScoreKeeper(pointsToWin: 7)
+    
+    private enum State {
+        case waitingToServe
+        case playing
+        case gameOver
+    }
+    
+    private var state: State = .waitingToServe
+    private let serveDelay: TimeInterval = 1
+    
     override func didMove(to view: SKView) {
         backgroundColor = .black
         physicsWorld.gravity = .zero
         view.showsPhysics = true
         setUpWalls()
+        setupScoreLables()
         setUpPlayerPaddle(in: view)
         setUpBall()
-        launchBall()
+        serve()
+        setUpMessageLabel()
+    }
+
+    override func update(_ currentTime: TimeInterval) {
+        guard state == .playing else { return }
+        keepBallAtConstantSpeed()
+        checkForGoal()
     }
     
     override func touchesBegan(_ touches: Set<UITouch>, with event: UIEvent?) {
+        if state == .gameOver {
+            restartGame()
+            return
+        }
         movePaddle(with: touches)
     }
     
@@ -39,10 +66,6 @@ final class GameScene: SKScene {
         let targetX = touch.location(in: self).x
         let halfWidth = paddleSize.width / 2
         playerPaddle.position.x = min(max(targetX, halfWidth), size.width - halfWidth)
-    }
-    
-    override func update(_ currentTime: TimeInterval) {
-        keepBallAtConstantSpeed()
     }
     
     private func keepBallAtConstantSpeed() {
@@ -59,7 +82,49 @@ final class GameScene: SKScene {
         let scale = ballSpeed / currentSpeed
         body.velocity = CGVector(dx: velocity.dx * scale, dy: velocity.dy * scale)
         
+    }
+    
+    private func checkForGoal() {
+        if ball.position.y < -ballRadius {
+            goalScored(by: .opponent)
+        } else if ball.position.y > size.height + ballRadius {
+            goalScored(by: .human)
+        }
+    }
+    
+    private func goalScored(by scorer: Player) {
+        scoreKeeper.awardPoint(to: scorer)
+        updateScoreLabels()
         
+        if let winner = scoreKeeper.winner {
+           endGame(winner: winner)
+        } else {
+            serve()
+        }
+    }
+    
+    private func endGame(winner: Player) {
+        state = .gameOver
+        ball.physicsBody?.velocity = .zero
+        ball.position = CGPoint(x: frame.midX, y: frame.midY)
+        let result = (winner == .human) ? "You win!" : "You Lose"
+        messageLabel.text = result + "\nTap to play again!"
+    }
+    
+    private func restartGame() {
+        scoreKeeper.reset()
+        updateScoreLabels()
+        messageLabel.text = ""
+        serve()
+    }
+    
+    private func addWall(from start: CGPoint, to end: CGPoint) {
+        let wall = SKNode()
+        let body = SKPhysicsBody(edgeFrom: start, to: end)
+        body.friction = 0
+        body.restitution = 1
+        wall.physicsBody = body
+        addChild(wall)
     }
     
     private func setUpWalls() {
@@ -70,18 +135,6 @@ final class GameScene: SKScene {
         
         addWall(from: bottomLeft, to: topLeft)
         addWall(from: bottomRight, to: topRight)
-        addWall(from: topLeft, to: topRight)
-        addWall(from: bottomLeft, to: bottomRight)
-        
-    }
-    
-    private func addWall(from start: CGPoint, to end: CGPoint) {
-        let wall = SKNode()
-        let body = SKPhysicsBody(edgeFrom: start, to: end)
-        body.friction = 0
-        body.restitution = 1
-        wall.physicsBody = body
-        addChild(wall)
     }
     
     private func setUpBall() {
@@ -102,14 +155,6 @@ final class GameScene: SKScene {
         addChild(ball)
     }
     
-    private func launchBall() {
-        let spread = CGFloat.random(in: -0.5...0.5)
-        let direction: CGFloat = Bool.random() ? 1 : -1
-        ball.physicsBody?.velocity = CGVector(
-            dx: ballSpeed * sin(spread),
-            dy: ballSpeed * cos(spread) * direction
-        )
-    }
     private func setUpPlayerPaddle(in view: SKView) {
         let rect = CGRect(x: -paddleSize.width / 2, y: -paddleSize.height / 2, width: paddleSize.width, height: paddleSize.height)
         
@@ -131,5 +176,57 @@ final class GameScene: SKScene {
         playerPaddle.physicsBody = body
         
         addChild(playerPaddle)
+    }
+    
+    private func launchBall() {
+        let spread = CGFloat.random(in: -0.5...0.5)
+        let direction: CGFloat = Bool.random() ? 1 : -1
+        ball.physicsBody?.velocity = CGVector(
+            dx: ballSpeed * sin(spread),
+            dy: ballSpeed * cos(spread) * direction
+        )
+        state = .playing
+    }
+    
+    private func serve() {
+        state = .waitingToServe
+        ball.physicsBody?.velocity = .zero
+        ball.position = CGPoint(x: frame.midX, y: frame.midY)
+        
+        let wait = SKAction.wait(forDuration: serveDelay)
+        let launch = SKAction.run { [weak self] in
+            self?.launchBall()
+        }
+        run(SKAction.sequence([wait, launch]))
+    }
+    
+    private func setupScoreLables() {
+        for label in [humanScoreLabel, opponentScoreLabel] {
+            label.fontSize = 72
+            label.fontColor = SKColor(white: 1, alpha: 0.25)
+            label.horizontalAlignmentMode = .center
+            label.verticalAlignmentMode = .center
+            label.zPosition = -1
+            addChild(label)
+        }
+        opponentScoreLabel.position = CGPoint(x: frame.midX, y: frame.midY + 80)
+        humanScoreLabel.position = CGPoint(x: frame.midX, y: frame.midY - 80)
+        updateScoreLabels()
+    }
+    
+    private func updateScoreLabels() {
+        humanScoreLabel.text = "\(scoreKeeper.humanScore)"
+        opponentScoreLabel.text = "\(scoreKeeper.opponentScore)"
+    }
+    
+    private func setUpMessageLabel() {
+        messageLabel.fontSize = 28
+        messageLabel.fontColor = .white
+        messageLabel.numberOfLines = 0
+        messageLabel.horizontalAlignmentMode = .center
+        messageLabel.verticalAlignmentMode = .center
+        messageLabel.position = CGPoint(x: frame.midX, y: frame.midY - 160)
+        messageLabel.zPosition = 1
+        addChild(messageLabel)
     }
 }
